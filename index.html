@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital Birthday Keepsake</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<style>
+/* ================= GLOBAL ================= */
+body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
+    background: radial-gradient(circle at center, #020617, #000);
+    color: white;
+}
+
+canvas { display: block; }
+
+/* ================= VAULT ================= */
+#vault {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    backdrop-filter: blur(30px);
+    background: rgba(255,255,255,0.08);
+    padding: 30px;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 0 60px rgba(0,255,255,0.3);
+    animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%,100% { transform: translate(-50%, -50%) translateY(0); }
+    50% { transform: translate(-50%, -50%) translateY(-10px); }
+}
+
+input {
+    width: 90%;
+    margin: 10px 0;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+}
+
+/* HOLD BUTTON WITH PROGRESS */
+#holdBtn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    background: linear-gradient(90deg, cyan, blue);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+#progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: rgba(255,255,255,0.4);
+}
+
+/* ================= HUD ================= */
+#counter {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+}
+
+#hud {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    color: cyan;
+    text-shadow: 0 0 20px cyan;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%,100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* ================= FINAL ================= */
+#finalCard {
+    position: absolute;
+    bottom: -100%;
+    left: 50%;
+    transform: translateX(-50%);
+    backdrop-filter: blur(30px);
+    background: rgba(255,255,255,0.15);
+    padding: 25px;
+    border-radius: 20px;
+    text-align: center;
+}
+
+</style>
+</head>
+<body>
+
+<div id="vault">
+    <h2>🎉 Who are we celebrating today?</h2>
+    <input type="text" id="nameInput" placeholder="Enter Name">
+    <input type="file" id="photos" multiple>
+    <button id="holdBtn">
+        <div id="progress"></div>
+        Hold to Unlock 🔓
+    </button>
+</div>
+
+<div id="counter">✨ Sparks Remaining: 8</div>
+<div id="hud">🎤 AI Listening...</div>
+
+<div id="finalCard">
+    <h2 id="finalText">🎂 Happy Birthday 🎂</h2>
+    <p>✨ A Special Moment Just For You ✨</p>
+</div>
+
+<audio id="music" src="birthday_song.mp3" loop></audio>
+
+<script>
+/* THREE SETUP */
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+let renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+camera.position.z = 5;
+
+let light = new THREE.PointLight(0xffffff, 1);
+light.position.set(5,5,5);
+scene.add(light);
+
+/* CRYSTALS */
+let crystals = [];
+let remaining = 8;
+
+function createCrystals(){
+    for(let i=0;i<8;i++){
+        let mesh = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(0.5),
+            new THREE.MeshStandardMaterial({color:0x00ffff, wireframe:true})
+        );
+        mesh.position.set((Math.random()-0.5)*6,(Math.random()-0.5)*6,(Math.random()-0.5)*6);
+        scene.add(mesh);
+        crystals.push(mesh);
+    }
+}
+createCrystals();
+
+/* CLICK INTERACTION */
+let raycaster = new THREE.Raycaster();
+let mouse = new THREE.Vector2();
+
+window.addEventListener('click',(e)=>{
+    mouse.x = (e.clientX/window.innerWidth)*2-1;
+    mouse.y = -(e.clientY/window.innerHeight)*2+1;
+    raycaster.setFromCamera(mouse,camera);
+
+    let hit = raycaster.intersectObjects(crystals);
+    if(hit.length>0){
+        let obj = hit[0].object;
+        scene.remove(obj);
+        crystals.splice(crystals.indexOf(obj),1);
+        remaining--;
+
+        document.getElementById('counter').innerText = `✨ Sparks Remaining: ${remaining}`;
+
+        gsap.fromTo(camera.position,{x:0},{x:0.2,repeat:5,yoyo:true,duration:0.05});
+
+        if(remaining===0) startVoice();
+    }
+});
+
+/* ANIMATION */
+function animate(){
+    requestAnimationFrame(animate);
+    scene.rotation.y += 0.001;
+    renderer.render(scene,camera);
+}
+animate();
+
+/* HOLD TO UNLOCK */
+let holdBtn = document.getElementById('holdBtn');
+let progress = document.getElementById('progress');
+let holdTime;
+
+holdBtn.onmousedown = ()=>{
+    gsap.to(progress,{width:'100%',duration:1.5});
+    holdTime = setTimeout(()=>{
+        document.getElementById('vault').style.display='none';
+        document.getElementById('music').play();
+
+        let name = document.getElementById('nameInput').value || 'Friend';
+        document.getElementById('finalText').innerText = `🎂 Happy Birthday ${name}`;
+
+    },1500);
+};
+
+holdBtn.onmouseup = ()=>{
+    clearTimeout(holdTime);
+    gsap.to(progress,{width:'0%',duration:0.3});
+};
+
+/* VOICE */
+function startVoice(){
+    document.getElementById('hud').style.display='block';
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recog = new SpeechRecognition();
+    recog.continuous = true;
+    recog.start();
+
+    recog.onresult = (e)=>{
+        let text = e.results[e.results.length-1][0].transcript.toLowerCase();
+        let music = document.getElementById('music');
+
+        if(text.includes('pause')) music.pause();
+        if(text.includes('play')) music.play();
+        if(text.includes('volume up')) music.volume=Math.min(1,music.volume+0.1);
+        if(text.includes('volume down')) music.volume=Math.max(0,music.volume-0.1);
+
+        if(text.includes('change vibe')){
+            document.body.style.background = `linear-gradient(45deg, hsl(${Math.random()*360},70%,20%), black)`;
+        }
+
+        if(text.includes('surprise')) showFinal();
+    }
+}
+
+/* FINAL */
+function showFinal(){
+    gsap.to('#finalCard',{bottom:'20%',duration:1});
+}
+
+/* RESPONSIVE */
+window.addEventListener('resize',()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
+</html>
